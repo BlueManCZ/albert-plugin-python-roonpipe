@@ -1,0 +1,135 @@
+"""
+RoonPipe Albert Plugin - Search and play Roon tracks via RoonPipe socket
+"""
+
+import json
+import socket
+from pathlib import Path
+
+from albert import *
+
+md_iid = '4.0'
+md_version = '1.0'
+md_name = 'RoonPipe'
+md_description = 'Search and play Roon tracks via RoonPipe'
+md_authors = ['BlueManCZ']
+
+
+SOCKET_PATH = '/tmp/roonpipe.sock'
+PLUGIN_DIR = Path(__file__).parent
+ICON_PATH = Path(PLUGIN_DIR / 'icons' / 'roon.png')
+
+
+def make_roon_icon():
+    """Create the Roon icon from a local file."""
+    return makeImageIcon(str(ICON_PATH))
+
+
+def send_command(command: dict) -> dict | None:
+    """Send a command to RoonPipe socket and return the response."""
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(5.0)
+        sock.connect(SOCKET_PATH)
+        sock.sendall(json.dumps(command).encode('utf-8'))
+
+        response = b''
+        while True:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+
+        sock.close()
+        return json.loads(response.decode('utf-8'))
+    except (socket.error, json.JSONDecodeError) as e:
+        return None
+
+
+def search_tracks(query: str) -> list[dict]:
+    """Search for tracks using RoonPipe."""
+    response = send_command({'command': 'search', 'query': query})
+    if response and response.get('results'):
+        return response['results']
+    return []
+
+
+def play_track(item_key: str, session_key: str) -> bool:
+    """Play a track using RoonPipe."""
+    response = send_command({
+        'command': 'play',
+        'item_key': item_key,
+        'session_key': session_key
+    })
+    return response is not None and response.get('success', False)
+
+
+class Plugin(PluginInstance, TriggerQueryHandler):
+
+    def __init__(self):
+        PluginInstance.__init__(self)
+        TriggerQueryHandler.__init__(self)
+
+    def defaultTrigger(self) -> str:
+        return 'roon '
+
+    def synopsis(self, query: str) -> str:
+        return 'Search for tracks...'
+
+    def handleTriggerQuery(self, query: Query):
+        query_string = query.string.strip()
+
+        if not query_string:
+            return
+
+        # Check if socket exists
+        if not Path(SOCKET_PATH).exists():
+            query.add(StandardItem(
+                id='roonpipe-not-running',
+                text='RoonPipe is not running',
+                subtext='Start RoonPipe daemon first: roonpipe',
+                icon_factory=make_roon_icon
+            ))
+            return
+
+        # Search for tracks
+        results = search_tracks(query_string)
+
+        if not results:
+            query.add(StandardItem(
+                id='roonpipe-no-results',
+                text='No tracks found',
+                subtext=f'No results for "{query_string}"',
+                icon_factory=make_roon_icon
+            ))
+            return
+
+        items = []
+        for i, result in enumerate(results):
+            title = result.get('title', 'Unknown')
+            subtitle = result.get('subtitle', '')
+            item_key = result.get('item_key', '')
+            session_key = result.get('sessionKey', '')
+            image_path = result.get('image', '')
+
+            # Use album art if available, otherwise fallback to Roon icon
+            if image_path and Path(image_path).exists():
+                icon_factory = lambda img=image_path: makeImageIcon(img)
+            else:
+                icon_factory = make_roon_icon
+
+            items.append(StandardItem(
+                id=f'roonpipe-track-{i}',
+                text=title,
+                subtext=subtitle,
+                icon_factory=icon_factory,
+                actions=[
+                    Action(
+                        id='play',
+                        text='Play',
+                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk)
+                    )
+                ]
+            ))
+
+        query.add(items)
