@@ -58,6 +58,7 @@ def play_track(item_key: str, session_key: str, action: str = 'play') -> bool:
     """Play a track using RoonPipe.
 
     Actions:
+        - 'play': Replace queue and play immediately
         - 'playNow': Play immediately (preserves current queue)
         - 'addNext': Play next (add after current track)
         - 'queue': Add to the end of the queue
@@ -145,7 +146,12 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                         id='queue',
                         text='Add to queue',
                         callable=lambda: play_track(item_key, session_key, 'queue')
-                    )
+                    ),
+                    Action(
+                        id='playNow',
+                        text='Play now and replace queue',
+                        callable=lambda: play_track(item_key, session_key, 'play')
+                    ),
                 ]
             ))
 
