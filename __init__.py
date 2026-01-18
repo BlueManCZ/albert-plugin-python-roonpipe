@@ -135,22 +135,22 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     Action(
                         id='playNow',
                         text='Play now',
-                        callable=lambda: play_track(item_key, session_key, 'playNow')
+                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk, 'playNow')
                     ),
                     Action(
                         id='addNext',
                         text='Play next',
-                        callable=lambda: play_track(item_key, session_key, 'addNext')
+                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk, 'addNext')
                     ),
                     Action(
                         id='queue',
                         text='Add to queue',
-                        callable=lambda: play_track(item_key, session_key, 'queue')
+                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk, 'queue')
                     ),
                     Action(
                         id='playNow',
                         text='Play now and replace queue',
-                        callable=lambda: play_track(item_key, session_key, 'play')
+                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk, 'play')
                     ),
                 ]
             ))
