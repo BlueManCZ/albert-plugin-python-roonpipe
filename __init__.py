@@ -54,12 +54,19 @@ def search_tracks(query: str) -> list[dict]:
     return []
 
 
-def play_track(item_key: str, session_key: str) -> bool:
-    """Play a track using RoonPipe."""
+def play_track(item_key: str, session_key: str, action: str = 'play') -> bool:
+    """Play a track using RoonPipe.
+
+    Actions:
+        - 'playNow': Play immediately (preserves current queue)
+        - 'addNext': Play next (add after current track)
+        - 'queue': Add to the end of the queue
+    """
     response = send_command({
         'command': 'play',
         'item_key': item_key,
-        'session_key': session_key
+        'session_key': session_key,
+        'action': action
     })
     return response is not None and response.get('success', False)
 
@@ -125,9 +132,19 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 icon_factory=icon_factory,
                 actions=[
                     Action(
-                        id='play',
-                        text='Play',
-                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk)
+                        id='playNow',
+                        text='Play now',
+                        callable=lambda: play_track(item_key, session_key, 'playNow')
+                    ),
+                    Action(
+                        id='addNext',
+                        text='Play next',
+                        callable=lambda: play_track(item_key, session_key, 'addNext')
+                    ),
+                    Action(
+                        id='queue',
+                        text='Add to queue',
+                        callable=lambda: play_track(item_key, session_key, 'queue')
                     )
                 ]
             ))
