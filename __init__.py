@@ -44,16 +44,34 @@ def send_command(command: dict) -> dict | None:
 
         sock.close()
         return json.loads(response.decode('utf-8'))
-    except (socket.error, json.JSONDecodeError) as e:
-        return None
+    except socket.timeout:
+        return {'error': 'timeout'}
+    except socket.error:
+        return {'error': 'connection'}
+    except json.JSONDecodeError:
+        return {'error': 'parse'}
 
 
-def search_tracks(query: str) -> list[dict]:
-    """Search for tracks using RoonPipe."""
+def search_tracks(query: str) -> tuple[list[dict], str | None]:
+    """Search for tracks using RoonPipe.
+
+    Returns:
+        Tuple of (results list, error message / None)
+    """
     response = send_command({'command': 'search', 'query': query})
-    if response and response.get('results'):
-        return response['results']
-    return []
+    if response is None:
+        return [], 'Connection failed'
+    if response.get('error') == 'timeout':
+        return [], 'Request timed out'
+    if response.get('error') == 'connection':
+        return [], 'Socket connection closed'
+    if response.get('error') == 'parse':
+        return [], 'Invalid response from RoonPipe'
+    if response.get('error'):
+        return [], str(response.get('error'))
+    if response.get('results'):
+        return response['results'], None
+    return [], None
 
 
 def play_track(item_key: str, session_key: str, action: str = 'play') -> bool:
@@ -108,7 +126,16 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             return
 
         # Search for tracks
-        results = search_tracks(query_string)
+        results, error = search_tracks(query_string)
+
+        if error:
+            query.add(StandardItem(
+                id='roonpipe-error',
+                text=error,
+                subtext='Error occurred while searching Roon tracks',
+                icon_factory=make_roon_icon
+            ))
+            return
 
         if not results:
             query.add(StandardItem(
