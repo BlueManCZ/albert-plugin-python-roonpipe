@@ -4,6 +4,7 @@ RoonPipe Albert Plugin - Search and play Roon tracks via RoonPipe socket
 
 import json
 import socket
+import time
 from pathlib import Path
 
 from albert import *
@@ -18,6 +19,7 @@ md_authors = ['BlueManCZ']
 SOCKET_PATH = '/tmp/roonpipe.sock'
 PLUGIN_DIR = Path(__file__).parent
 ICON_PATH = Path(PLUGIN_DIR / 'icons' / 'roon.png')
+DEBOUNCE_MS = 200  # Debounce delay in milliseconds
 
 
 def make_roon_icon():
@@ -88,6 +90,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         query_string = query.string.strip()
 
         if not query_string:
+            return
+
+        # Debounce: wait before searching to avoid spamming on every keystroke
+        time.sleep(DEBOUNCE_MS / 1000)
+        if not query.isValid:
             return
 
         # Check if socket exists
