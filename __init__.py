@@ -74,20 +74,23 @@ def search_tracks(query: str) -> tuple[list[dict], str | None]:
     return [], None
 
 
-def play_track(item_key: str, session_key: str, action: str = 'play') -> bool:
-    """Play a track using RoonPipe.
+def play_item(item_key: str, session_key: str, category_key: str, item_index: int, action_title: str) -> bool:
+    """Play an item using RoonPipe.
 
-    Actions:
-        - 'play': Replace queue and play immediately
-        - 'playNow': Play immediately (preserves current queue)
-        - 'addNext': Play next (add after current track)
-        - 'queue': Add to the end of the queue
+    Args:
+        item_key: Item key from search results
+        session_key: Session key from search results
+        category_key: Category key from search results
+        item_index: Index from search results
+        action_title: Title of the action to execute (e.g., "Play Now", "Queue")
     """
     response = send_command({
         'command': 'play',
         'item_key': item_key,
         'session_key': session_key,
-        'action': action
+        'category_key': category_key,
+        'item_index': item_index,
+        'action_title': action_title
     })
     return response is not None and response.get('success', False)
 
@@ -152,7 +155,15 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             subtitle = result.get('subtitle', '')
             item_key = result.get('item_key', '')
             session_key = result.get('sessionKey', '')
+            category_key = result.get('category_key', '')
+            item_index = result.get('index', 0)
+            item_type = result.get('type', 'track')
             image_path = result.get('image', '')
+            actions_data = result.get('actions', [])
+
+            # Format: Type • subtitle
+            type_label = item_type.capitalize()
+            display_subtitle = f"{type_label} • {subtitle}" if subtitle else type_label
 
             # Use album art if available, otherwise fallback to Roon icon
             if image_path and Path(image_path).exists():
@@ -160,33 +171,26 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             else:
                 icon_factory = make_roon_icon
 
+            # Build actions from API response
+            item_actions = []
+            for action in actions_data:
+                action_title = action.get('title', '')
+                if action_title:
+                    # Create a unique action ID from the title
+                    action_id = action_title.lower().replace(' ', '_')
+                    item_actions.append(Action(
+                        id=action_id,
+                        text=action_title,
+                        callable=lambda ik=item_key, sk=session_key, ck=category_key, idx=item_index, at=action_title:
+                            play_item(ik, sk, ck, idx, at)
+                    ))
+
             items.append(StandardItem(
-                id=f'roonpipe-track-{i}',
+                id=f'roonpipe-{item_type}-{i}',
                 text=title,
-                subtext=subtitle,
+                subtext=display_subtitle,
                 icon_factory=icon_factory,
-                actions=[
-                    Action(
-                        id='playNow',
-                        text='Play now',
-                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk, 'playNow')
-                    ),
-                    Action(
-                        id='addNext',
-                        text='Play next',
-                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk, 'addNext')
-                    ),
-                    Action(
-                        id='queue',
-                        text='Add to queue',
-                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk, 'queue')
-                    ),
-                    Action(
-                        id='playNow',
-                        text='Play now and replace queue',
-                        callable=lambda ik=item_key, sk=session_key: play_track(ik, sk, 'play')
-                    ),
-                ]
+                actions=item_actions
             ))
 
         query.add(items)
