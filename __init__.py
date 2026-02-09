@@ -9,7 +9,7 @@ from pathlib import Path
 
 from albert import *
 
-md_iid = '4.0'
+md_iid = '5.0'
 md_version = '1.0'
 md_name = 'RoonPipe'
 md_description = 'Search and play Roon tracks via RoonPipe'
@@ -24,7 +24,7 @@ DEBOUNCE_MS = 200  # Debounce delay in milliseconds
 
 def make_roon_icon():
     """Create the Roon icon from a local file."""
-    return makeImageIcon(str(ICON_PATH))
+    return Icon.iconified(Icon.image(ICON_PATH), border_radius=0.4, border_width=0)
 
 
 def send_command(command: dict) -> dict | None:
@@ -95,58 +95,58 @@ def play_item(item_key: str, session_key: str, category_key: str, item_index: in
     return response is not None and response.get('success', False)
 
 
-class Plugin(PluginInstance, TriggerQueryHandler):
+class Plugin(PluginInstance, GeneratorQueryHandler):
 
     def __init__(self):
         PluginInstance.__init__(self)
-        TriggerQueryHandler.__init__(self)
+        GeneratorQueryHandler.__init__(self)
 
-    def defaultTrigger(self) -> str:
+    def defaultTrigger(self):
         return 'roon '
 
-    def synopsis(self, query: str) -> str:
+    def synopsis(self, query):
         return 'Search for tracks...'
 
-    def handleTriggerQuery(self, query: Query):
-        query_string = query.string.strip()
+    def items(self, ctx):
+        query_string = ctx.query.strip()
 
         if not query_string:
             return
 
         # Debounce: wait before searching to avoid spamming on every keystroke
         time.sleep(DEBOUNCE_MS / 1000)
-        if not query.isValid:
+        if not ctx.isValid:
             return
 
         # Check if socket exists
         if not Path(SOCKET_PATH).exists():
-            query.add(StandardItem(
+            yield [StandardItem(
                 id='roonpipe-not-running',
                 text='RoonPipe is not running',
                 subtext='Start RoonPipe daemon first: roonpipe',
                 icon_factory=make_roon_icon
-            ))
+            )]
             return
 
         # Search for tracks
         results, error = search_tracks(query_string)
 
         if error:
-            query.add(StandardItem(
+            yield [StandardItem(
                 id='roonpipe-error',
                 text=error,
                 subtext='Error occurred while searching Roon tracks',
                 icon_factory=make_roon_icon
-            ))
+            )]
             return
 
         if not results:
-            query.add(StandardItem(
+            yield [StandardItem(
                 id='roonpipe-no-results',
                 text='No tracks found',
                 subtext=f'No results for "{query_string}"',
                 icon_factory=make_roon_icon
-            ))
+            )]
             return
 
         items = []
@@ -167,7 +167,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
             # Use album art if available, otherwise fallback to Roon icon
             if image_path and Path(image_path).exists():
-                icon_factory = lambda img=image_path: makeImageIcon(img)
+                icon_factory = lambda img=image_path: Icon.iconified(Icon.image(img), border_radius=0.4, border_width=0)
             else:
                 icon_factory = make_roon_icon
 
@@ -179,9 +179,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     # Create a unique action ID from the title
                     action_id = action_title.lower().replace(' ', '_')
                     item_actions.append(Action(
-                        id=action_id,
-                        text=action_title,
-                        callable=lambda ik=item_key, sk=session_key, ck=category_key, idx=item_index, at=action_title:
+                        action_id,
+                        action_title,
+                        lambda ik=item_key, sk=session_key, ck=category_key, idx=item_index, at=action_title:
                             play_item(ik, sk, ck, idx, at)
                     ))
 
@@ -193,4 +193,4 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 actions=item_actions
             ))
 
-        query.add(items)
+        yield items
