@@ -74,8 +74,9 @@ def search_tracks(query: str) -> tuple[list[dict], str | None]:
     return [], None
 
 
-def play_item(item_key: str, session_key: str, category_key: str, item_index: int, action_title: str) -> bool:
-    """Play an item using RoonPipe.
+def play_item(item_key: str, session_key: str, category_key: str, item_index: int, action_title: str,
+              command: str = 'play', item_type: str = '', item_title: str = '', image_key: str = '') -> bool:
+    """Execute an item action using RoonPipe.
 
     Args:
         item_key: Item key from search results
@@ -83,15 +84,28 @@ def play_item(item_key: str, session_key: str, category_key: str, item_index: in
         category_key: Category key from search results
         item_index: Index from search results
         action_title: Title of the action to execute (e.g., "Play Now", "Queue")
+        command: Socket command to use (e.g., "play", "remove_frequency")
+        item_type: Type of the item (e.g., "track", "album")
+        item_title: Title of the item
+        image_key: Image key of the item
     """
-    response = send_command({
-        'command': 'play',
-        'item_key': item_key,
-        'session_key': session_key,
-        'category_key': category_key,
-        'item_index': item_index,
-        'action_title': action_title
-    })
+    if command == 'remove_frequency':
+        payload = {
+            'command': 'remove_frequency',
+            'item_type': item_type,
+            'item_title': item_title,
+            'item_image_key': image_key
+        }
+    else:
+        payload = {
+            'command': command,
+            'item_key': item_key,
+            'session_key': session_key,
+            'category_key': category_key,
+            'item_index': item_index,
+            'action_title': action_title
+        }
+    response = send_command(payload)
     return response is not None and response.get('success', False)
 
 
@@ -159,6 +173,7 @@ class Plugin(PluginInstance, GeneratorQueryHandler):
             item_index = result.get('index', 0)
             item_type = result.get('type', 'track')
             image_path = result.get('image', '')
+            image_key = result.get('image_key', '')
             actions_data = result.get('actions', [])
 
             # Format: Type • subtitle
@@ -176,13 +191,14 @@ class Plugin(PluginInstance, GeneratorQueryHandler):
             for action in actions_data:
                 action_title = action.get('title', '')
                 if action_title:
-                    # Create a unique action ID from the title
+                    action_command = action.get('command', 'play')
                     action_id = action_title.lower().replace(' ', '_')
                     item_actions.append(Action(
                         action_id,
                         action_title,
-                        lambda ik=item_key, sk=session_key, ck=category_key, idx=item_index, at=action_title:
-                            play_item(ik, sk, ck, idx, at)
+                        lambda ik=item_key, sk=session_key, ck=category_key, idx=item_index,
+                               at=action_title, cmd=action_command, it=item_type, ititle=title, imgk=image_key:
+                            play_item(ik, sk, ck, idx, at, command=cmd, item_type=it, item_title=ititle, image_key=imgk)
                     ))
 
             items.append(StandardItem(
