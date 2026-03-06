@@ -89,22 +89,20 @@ def play_item(item_key: str, session_key: str, category_key: str, item_index: in
         item_title: Title of the item
         image_key: Image key of the item
     """
-    if command == 'remove_frequency':
-        payload = {
-            'command': 'remove_frequency',
-            'item_type': item_type,
-            'item_title': item_title,
-            'item_image_key': image_key
-        }
-    else:
-        payload = {
-            'command': command,
+    payload = {
+        'command': command,
+        'item_title': item_title,
+        'item_type': item_type,
+        'item_image_key': image_key
+    }
+    if command != 'remove_frequency':
+        payload.update({
             'item_key': item_key,
             'session_key': session_key,
             'category_key': category_key,
             'item_index': item_index,
             'action_title': action_title
-        }
+        })
     response = send_command(payload)
     return response is not None and response.get('success', False)
 
