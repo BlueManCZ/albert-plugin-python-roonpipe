@@ -202,7 +202,7 @@ class Plugin(PluginInstance, GeneratorQueryHandler):
                     ))
 
             items.append(StandardItem(
-                id=f'roonpipe-{item_type}-{item_key}-{item_index}',
+                id=f'roonpipe-{image_key}',
                 text=title,
                 subtext=display_subtitle,
                 icon_factory=icon_factory,
